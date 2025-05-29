@@ -37,6 +37,38 @@
         button {
             -webkit-tap-highlight-color: transparent;
         }
+        /* Range slider custom styles */
+        input[type="range"] {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 100%;
+            height: 8px;
+            background: #d1d5db; /* Tailwind gray-300 */
+            border-radius: 5px;
+            outline: none;
+            opacity: 0.7;
+            transition: opacity .2s;
+        }
+        input[type="range"]:hover {
+            opacity: 1;
+        }
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 20px;
+            height: 20px;
+            background: #3b82f6; /* Tailwind sky-500 */
+            border-radius: 50%;
+            cursor: pointer;
+        }
+        input[type="range"]::-moz-range-thumb {
+            width: 20px;
+            height: 20px;
+            background: #3b82f6;
+            border-radius: 50%;
+            cursor: pointer;
+            border: none;
+        }
     </style>
 </head>
 <body class="bg-slate-100 text-slate-800 min-h-screen flex flex-col items-center p-4 sm:p-6">
@@ -44,8 +76,7 @@
     <div class="w-full max-w-2xl bg-white p-6 sm:p-8 rounded-xl shadow-xl">
         <header class="mb-6 text-center">
             <h1 class="text-3xl font-bold text-sky-600">音読アプリ</h1>
-            <p class="text-sm text-slate-500 mt-1">テキストを入力して、読み上げ箇所をハイライトします。</p>
-        </header>
+            </header>
 
         <div id="loaderContainer" class="text-center my-4 hidden">
             <div class="loader"></div>
@@ -63,14 +94,7 @@
             </button>
         </section>
 
-        <section class="mb-6">
-            <h2 class="text-lg font-semibold mb-2 text-slate-700">読み上げテキスト:</h2>
-            <div id="textDisplayContainer" class="p-4 border border-slate-300 rounded-lg bg-slate-50 min-h-[100px] text-lg">
-                <p class="text-slate-400">テキストをセットするとここに表示されます。</p>
-            </div>
-        </section>
-
-        <section>
+        <section> 
             <h2 class="text-lg font-semibold mb-3 text-slate-700">コントロール:</h2>
             <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 <button id="playButton" disabled class="bg-green-500 hover:bg-green-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:shadow-lg transition-all duration-150 ease-in-out disabled:opacity-50 disabled:cursor-not-allowed active:bg-green-700">再生</button>
@@ -80,7 +104,7 @@
             </div>
         </section>
         
-        <section class="mt-6 grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <section class="mt-6 grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-6"> 
             <div>
                 <label for="segmentationMethod" class="block text-sm font-medium text-slate-700 mb-1">区切り方:</label>
                 <select id="segmentationMethod" class="w-full p-2 border border-slate-300 rounded-lg focus:ring-1 focus:ring-sky-500 focus:border-sky-500">
@@ -91,10 +115,21 @@
             <div>
                 <label for="voiceSelect" class="block text-sm font-medium text-slate-700 mb-1">声の選択:</label>
                 <select id="voiceSelect" class="w-full p-2 border border-slate-300 rounded-lg focus:ring-1 focus:ring-sky-500 focus:border-sky-500">
-                    {/* Options will be populated by JavaScript */}
-                </select>
+                    </select>
+            </div>
+            <div class="sm:col-span-2"> 
+                <label for="speedControl" class="block text-sm font-medium text-slate-700 mb-1">読み上げ速度: <span id="speedValueDisplay" class="font-semibold text-sky-600">1.0</span>x</label>
+                <input type="range" id="speedControl" min="0.5" max="2" step="0.1" value="1" class="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer">
             </div>
         </section>
+
+        <section class="mt-6 mb-6"> 
+            <h2 class="text-lg font-semibold mb-2 text-slate-700">読み上げテキスト:</h2>
+            <div id="textDisplayContainer" class="p-4 border border-slate-300 rounded-lg bg-slate-50 min-h-[100px] text-lg">
+                <p class="text-slate-400">テキストをセットするとここに表示されます。</p>
+            </div>
+        </section>
+
     </div>
 
     <footer class="mt-8 text-center text-sm text-slate-500">
@@ -112,7 +147,7 @@
 
         let noSoundTimer = null;
         let currentTokenIndexForNoSound = 0;
-        const NO_SOUND_INTERVAL = 700; 
+        const NO_SOUND_INTERVAL_NORMAL_SPEED = 700; // ms, for speed 1x
 
         // --- DOM要素 ---
         const textInput = document.getElementById('textInput');
@@ -127,6 +162,8 @@
         const errorMessage = document.getElementById('errorMessage');
         const voiceSelect = document.getElementById('voiceSelect');
         const segmentationMethodSelect = document.getElementById('segmentationMethod');
+        const speedControl = document.getElementById('speedControl');
+        const speedValueDisplay = document.getElementById('speedValueDisplay');
 
         // --- メッセージ表示 ---
         function showMessage(element, message, isError = false) {
@@ -140,7 +177,7 @@
         
         // --- Kuromojiの初期化 ---
         function initKuromoji() {
-            if (kuromojiTokenizer) return; // 初期化済みなら何もしない
+            if (kuromojiTokenizer) return;
             loaderContainer.classList.remove('hidden');
             setTextButton.disabled = true;
             segmentationMethodSelect.disabled = true;
@@ -150,19 +187,14 @@
                 segmentationMethodSelect.disabled = false;
                 if (err) {
                     showMessage(errorMessage, "形態素解析エンジンの読み込みに失敗しました。句読点区切りのみ利用可能です。", true);
-                    // Kuromojiが失敗した場合、選択肢から無効化またはデフォルトを句読点にする
                     const kuromojiOption = segmentationMethodSelect.querySelector('option[value="kuromoji"]');
-                    if (kuromojiOption) {
-                        kuromojiOption.disabled = true;
-                    }
-                    if (segmentationMethodSelect.value === "kuromoji") {
-                         segmentationMethodSelect.value = "punctuation"; // デフォルト変更
-                    }
+                    if (kuromojiOption) kuromojiOption.disabled = true;
+                    if (segmentationMethodSelect.value === "kuromoji") segmentationMethodSelect.value = "punctuation";
                     return;
                 }
                 kuromojiTokenizer = tokenizer;
                 console.log("Kuromoji.js ready.");
-                if (textInput.value.trim() === "") { // テキスト未入力時のみメッセージ表示
+                if (textInput.value.trim() === "") {
                     showMessage(warningMessage, "テキストを入力して「テキストをセットして準備」ボタンを押してください。");
                 }
             });
@@ -173,7 +205,7 @@
             const segmentationMethod = segmentationMethodSelect.value;
             if (segmentationMethod === "kuromoji" && !kuromojiTokenizer) {
                 showMessage(errorMessage, "形態素解析エンジンがまだ準備できていません。先に読み込みを行います。", true);
-                initKuromoji(); // Kuromojiが未初期化なら初期化を試みる
+                initKuromoji(); 
                 return;
             }
             const text = textInput.value.trim();
@@ -198,14 +230,13 @@
             let tokensRaw = [];
             if (segmentationMethod === "kuromoji" && kuromojiTokenizer) {
                 tokensRaw = kuromojiTokenizer.tokenize(text);
-            } else { // punctuation or kuromoji failed
+            } else { 
                 tokensRaw = tokenizeByPunctuation(text);
             }
 
             let currentPosition = 0;
             tokensRaw.forEach((tokenData, index) => {
                 const span = document.createElement('span');
-                // Kuromojiはsurface_form、自作はtextプロパティ
                 const tokenText = tokenData.surface_form || tokenData.text; 
                 span.textContent = tokenText;
                 span.id = `token-${index}`;
@@ -221,6 +252,7 @@
             });
             
             utterance = new SpeechSynthesisUtterance(textDisplayContainer.textContent); 
+            utterance.rate = parseFloat(speedControl.value); // 初期レート設定
             setupUtteranceEvents();
 
             updateButtonStates(true, false, false, false); 
@@ -231,16 +263,9 @@
         function tokenizeByPunctuation(text) {
             const tokens = [];
             if (!text) return tokens;
-
-            // 句読点と改行で分割（句読点自体も保持したいので、マッチした区切り文字を含むようにする）
-            // 例: 「これは、テストです。新しい文。」
-            // -> ["これは、", "テストです。", "新しい文。"]
             const segments = text.match(/[^。、！？\n]+[。、！？\n]*|[。、！？\n]+/g) || [text]; 
-            
             segments.forEach(segment => {
-                if (segment.trim() !== '') {
-                    tokens.push({ text: segment }); // Kuromojiの形式に合わせるためオブジェクトにする
-                }
+                if (segment.trim() !== '') tokens.push({ text: segment }); 
             });
             return tokens;
         }
@@ -256,6 +281,7 @@
             } else {
                  utterance.voice = null; 
             }
+            // utterance.rate は processAndDisplayText または speedControl のリスナーで設定済み
 
             utterance.onstart = () => {
                 console.log("Speech started.");
@@ -263,36 +289,24 @@
             };
 
             utterance.onboundary = (event) => {
-                // charIndex を使ったハイライトは句読点区切りの場合、粒度が荒くなる可能性がある
-                // 特に 'word' イベントの場合、句読点区切りの長いトークン内で複数回発生しうる
-                // 'sentence' イベントの方が合うかもしれないが、ブラウザ依存度が高い
-                // ここでは既存のロジックを維持し、charIndex に基づいて最も近いトークンをハイライト
                 if (event.name !== 'word' && event.name !== 'sentence' && typeof event.charIndex === 'undefined') return;
-
-
                 const charIndex = event.charIndex;
                 if (currentHighlightedSpan) {
                     currentHighlightedSpan.classList.remove('highlight');
                 }
                 let foundToken = null;
-                // processedTokens 配列から、現在の charIndex に該当するトークンを探す
                 for (let i = 0; i < processedTokens.length; i++) {
                     const token = processedTokens[i];
                     if (charIndex >= token.startIndex && charIndex < token.endIndex) {
-                        foundToken = token;
-                        break; 
+                        foundToken = token; break; 
                     }
-                     // charIndex が現在のトークンの startIndex より小さい場合、前のトークンが該当する可能性
                     if (token.startIndex > charIndex && i > 0) { 
-                        foundToken = processedTokens[i-1];
-                        break;
+                        foundToken = processedTokens[i-1]; break;
                     }
                 }
-                // 最後のトークンまで来た場合
                 if (!foundToken && processedTokens.length > 0 && charIndex >= processedTokens[processedTokens.length - 1]?.startIndex) {
                     foundToken = processedTokens[processedTokens.length - 1];
                 }
-
                 if (foundToken) {
                     foundToken.spanElement.classList.add('highlight');
                     currentHighlightedSpan = foundToken.spanElement;
@@ -302,9 +316,7 @@
 
             utterance.onend = () => {
                 console.log("Speech finished.");
-                if (currentHighlightedSpan) {
-                    currentHighlightedSpan.classList.remove('highlight');
-                }
+                if (currentHighlightedSpan) currentHighlightedSpan.classList.remove('highlight');
                 currentHighlightedSpan = null;
                 updateButtonStates(true, false, false, false);
             };
@@ -317,9 +329,7 @@
 
         // --- 「音声なし」モード用ハイライト処理 ---
         function highlightNextTokenForNoSound() {
-            if (currentHighlightedSpan) {
-                currentHighlightedSpan.classList.remove('highlight');
-            }
+            if (currentHighlightedSpan) currentHighlightedSpan.classList.remove('highlight');
 
             if (currentTokenIndexForNoSound < processedTokens.length) {
                 const token = processedTokens[currentTokenIndexForNoSound];
@@ -330,10 +340,8 @@
             } else {
                 if (noSoundTimer) clearInterval(noSoundTimer);
                 noSoundTimer = null;
-                if (currentHighlightedSpan) { 
-                    currentHighlightedSpan.classList.remove('highlight');
-                    currentHighlightedSpan = null;
-                }
+                if (currentHighlightedSpan) currentHighlightedSpan.classList.remove('highlight');
+                currentHighlightedSpan = null;
                 updateButtonStates(true, false, false, false); 
                 console.log("Highlights finished (no sound).");
             }
@@ -349,33 +357,32 @@
                 showMessage(warningMessage, "読み上げるテキストがセットされていません。");
                 return;
             }
-
             stopAllProcesses(); 
 
+            const currentSpeed = parseFloat(speedControl.value);
+
             if (selectedVoiceName === 'none') {
-                console.log("Playing highlights (no sound).");
+                console.log("Playing highlights (no sound). Speed: " + currentSpeed + "x");
                 currentTokenIndexForNoSound = 0;
+                const currentInterval = NO_SOUND_INTERVAL_NORMAL_SPEED / currentSpeed;
                 highlightNextTokenForNoSound(); 
                 if (processedTokens.length > 1) { 
-                    noSoundTimer = setInterval(highlightNextTokenForNoSound, NO_SOUND_INTERVAL);
-                } else if (processedTokens.length === 1) { // トークンが1つだけなら終了処理
-                     setTimeout(() => { // 即時終了だとハイライトが見えないので少し遅延
-                        if (noSoundTimer) clearInterval(noSoundTimer);
-                        noSoundTimer = null;
-                        if (currentHighlightedSpan) { 
-                            currentHighlightedSpan.classList.remove('highlight');
-                            currentHighlightedSpan = null;
-                        }
+                    noSoundTimer = setInterval(highlightNextTokenForNoSound, currentInterval);
+                } else if (processedTokens.length === 1) {
+                     setTimeout(() => {
+                        if (noSoundTimer) clearInterval(noSoundTimer); noSoundTimer = null;
+                        if (currentHighlightedSpan) currentHighlightedSpan.classList.remove('highlight'); currentHighlightedSpan = null;
                         updateButtonStates(true, false, false, false); 
                         console.log("Highlights finished (no sound, single token).");
-                    }, NO_SOUND_INTERVAL);
+                    }, currentInterval);
                 }
                 updateButtonStates(false, true, true, false);
             } else {
                 if (utterance) {
                     const voice = voices.find(v => v.name === selectedVoiceName);
                     utterance.voice = voice ? voice : null;
-                    console.log("Playing speech.");
+                    utterance.rate = currentSpeed; // 再生前にレートを確実に設定
+                    console.log("Playing speech. Speed: " + currentSpeed + "x");
                     synth.speak(utterance);
                 } else {
                     showMessage(errorMessage, "読み上げオブジェクトの準備に失敗しました。", true);
@@ -386,7 +393,7 @@
         function pauseText() {
             if (voiceSelect.value === 'none') {
                 if (noSoundTimer) {
-                    clearInterval(noSoundTimer);
+                    clearInterval(noSoundTimer); // タイマーは止めるが、noSoundTimer自体はnullにしない（resumeで使うため）
                     console.log("Pausing highlights (no sound).");
                     updateButtonStates(false, false, true, true); 
                 }
@@ -400,20 +407,23 @@
         }
         
         function resumeText() {
+            const currentSpeed = parseFloat(speedControl.value);
             if (voiceSelect.value === 'none') {
-                // noSoundTimerがnullでない（つまりclearIntervalされただけ）かつ、まだトークンが残っている場合
-                if (noSoundTimer !== null && processedTokens.length > 0 && currentTokenIndexForNoSound < processedTokens.length) {
-                    console.log("Resuming highlights (no sound).");
+                // noSoundTimer がクリアされているが、まだトークンが残っている場合
+                if (noSoundTimer && processedTokens.length > 0 && currentTokenIndexForNoSound < processedTokens.length) {
+                    console.log("Resuming highlights (no sound). Speed: " + currentSpeed + "x");
+                    const currentInterval = NO_SOUND_INTERVAL_NORMAL_SPEED / currentSpeed;
                     highlightNextTokenForNoSound(); 
                     if (currentTokenIndexForNoSound < processedTokens.length) { 
-                         noSoundTimer = setInterval(highlightNextTokenForNoSound, NO_SOUND_INTERVAL);
+                         noSoundTimer = setInterval(highlightNextTokenForNoSound, currentInterval);
                     }
                     updateButtonStates(false, true, true, false);
                 }
             } else {
                 if (synth.speaking && synth.paused) {
+                    // utterance.rate = currentSpeed; // 再開前にレートを更新しても良いが、通常はpause前のものが維持される
                     synth.resume();
-                    console.log("Resuming speech.");
+                    console.log("Resuming speech. Speed: " + currentSpeed + "x");
                     updateButtonStates(false, true, true, false);
                 }
             }
@@ -430,11 +440,7 @@
                 noSoundTimer = null;
             }
             currentTokenIndexForNoSound = 0;
-
-            if (synth.speaking) {
-                synth.cancel(); 
-            }
-            
+            if (synth.speaking) synth.cancel(); 
             if (currentHighlightedSpan) {
                 currentHighlightedSpan.classList.remove('highlight');
                 currentHighlightedSpan = null;
@@ -444,47 +450,34 @@
 
         function updateButtonStates(canPlay, canPause, canStop, canResume) {
             const textIsSet = textInput.value.trim() !== '' && processedTokens.length > 0;
-
             playButton.disabled = !canPlay || !textIsSet;
-            if (canResume && textIsSet) { 
-                playButton.disabled = true;
-            }
-            
+            if (canResume && textIsSet) playButton.disabled = true;
             pauseButton.disabled = !canPause || !textIsSet;
             stopButton.disabled = !canStop || !textIsSet;
             resumeButton.disabled = !canResume || !textIsSet;
-
             if (!textIsSet) { 
-                playButton.disabled = true;
-                pauseButton.disabled = true;
-                stopButton.disabled = true;
-                resumeButton.disabled = true;
+                playButton.disabled = true; pauseButton.disabled = true;
+                stopButton.disabled = true; resumeButton.disabled = true;
             }
         }
         
         function populateVoiceList() {
             voices = synth.getVoices();
             voiceSelect.innerHTML = ''; 
-            
             const noSoundOption = document.createElement('option');
-            noSoundOption.value = "none";
-            noSoundOption.textContent = "音声なし (ハイライトのみ)";
+            noSoundOption.value = "none"; noSoundOption.textContent = "音声なし (ハイライトのみ)";
             voiceSelect.appendChild(noSoundOption);
-
             const defaultOption = document.createElement('option');
-            defaultOption.value = ""; 
-            defaultOption.textContent = "デフォルトの声";
+            defaultOption.value = ""; defaultOption.textContent = "デフォルトの声";
             voiceSelect.appendChild(defaultOption);
-            
             _populateVoiceList(); 
         }
 
         function _populateVoiceList() {
             voices = synth.getVoices(); 
             const existingOptionsValues = new Set(Array.from(voiceSelect.options).map(opt => opt.value));
-
             voices.forEach(voice => {
-                if (!existingOptionsValues.has(voice.name)) { // 重複追加を避ける
+                if (!existingOptionsValues.has(voice.name)) {
                     if (voice.lang.startsWith('ja')) {
                         const option = document.createElement('option');
                         option.textContent = `${voice.name} (${voice.lang})`;
@@ -516,37 +509,45 @@
             stopAllProcesses(); 
             if (utterance) { 
                  const selectedVoiceName = voiceSelect.value;
-                 if (selectedVoiceName === "none") {
-                    // playTextで処理
-                 } else if (selectedVoiceName === "") {
-                     utterance.voice = null; 
-                 } else {
+                 if (selectedVoiceName === "none") { /* playTextで処理 */ }
+                 else if (selectedVoiceName === "") utterance.voice = null; 
+                 else {
                     const voice = voices.find(v => v.name === selectedVoiceName);
                     utterance.voice = voice ? voice : null;
                  }
+                 utterance.rate = parseFloat(speedControl.value); // 声変更時もレートを再適用
             }
             updateButtonStates(true, false, false, false); 
         });
 
         segmentationMethodSelect.addEventListener('change', () => {
-            // 区切り方が変更されたら、テキストが入力されていれば再処理
-            if (textInput.value.trim() !== '') {
-                processAndDisplayText();
-            } else { // テキストが空なら、Kuromojiの準備だけ促す
-                if (segmentationMethodSelect.value === "kuromoji" && !kuromojiTokenizer) {
-                    initKuromoji();
-                }
+            if (textInput.value.trim() !== '') processAndDisplayText();
+            else if (segmentationMethodSelect.value === "kuromoji" && !kuromojiTokenizer) initKuromoji();
+        });
+
+        speedControl.addEventListener('input', () => {
+            const newSpeed = parseFloat(speedControl.value);
+            speedValueDisplay.textContent = newSpeed.toFixed(1);
+            if (utterance) utterance.rate = newSpeed;
+
+            // 「音声なし」モードがアクティブ（再生中または一時停止中）の場合、タイマーを更新
+            if (voiceSelect.value === 'none' && noSoundTimer) {
+                 clearInterval(noSoundTimer); // 現在のタイマーを停止
+                 // 再生中だった場合のみタイマーを再開
+                 if (!pauseButton.disabled) { // pauseButtonが有効 = 再生中だった
+                    const currentInterval = NO_SOUND_INTERVAL_NORMAL_SPEED / newSpeed;
+                    // highlightNextTokenForNoSound(); // すぐに次のトークンへ（オプション）
+                    noSoundTimer = setInterval(highlightNextTokenForNoSound, currentInterval);
+                 }
+                 // 一時停止中の場合は、resumeTextが新しい速度でタイマーを開始する
             }
         });
 
         // --- 初期化処理 ---
         window.addEventListener('load', () => {
+            speedValueDisplay.textContent = parseFloat(speedControl.value).toFixed(1); // 初期速度表示
             if ('speechSynthesis' in window && 'kuromoji' in window) {
-                // Kuromojiは選択された場合のみ初期化する方針に変更
-                // initKuromoji(); 
-                if (segmentationMethodSelect.value === "kuromoji") {
-                    initKuromoji(); // 初回ロード時、デフォルトがKuromojiなら初期化
-                }
+                if (segmentationMethodSelect.value === "kuromoji") initKuromoji();
                 populateVoiceList();
                 if (speechSynthesis.onvoiceschanged !== undefined) {
                     speechSynthesis.onvoiceschanged = _populateVoiceList;
@@ -557,17 +558,9 @@
                 if (!('speechSynthesis' in window)) message += "音声合成に非対応です。";
                 if (!('kuromoji'in window)) message += "形態素解析ライブラリの読み込みに失敗しました。";
                 showMessage(errorMessage, `ご使用のブラウザは一部機能に非対応です: ${message}`, true);
-                
-                setTextButton.disabled = true;
-                playButton.disabled = true;
-                pauseButton.disabled = true;
-                resumeButton.disabled = true;
-                stopButton.disabled = true;
-                voiceSelect.disabled = true;
-                segmentationMethodSelect.disabled = true;
+                setTextButton.disabled = true; playButton.disabled = true; pauseButton.disabled = true;
+                resumeButton.disabled = true; stopButton.disabled = true; voiceSelect.disabled = true;
+                segmentationMethodSelect.disabled = true; speedControl.disabled = true;
             }
         });
-
-    </script>
-</body>
-</html>
+    </script></body></html>
